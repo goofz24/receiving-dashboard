@@ -78,9 +78,9 @@ npm install</pre></li>
 <p><b>If it says "Can't reach the database":</b> the message under it tells you why. The usual causes are a typo in the password, using the owner user instead of <code>dashboard_reader.yourcode</code>, or a paused project. If the pooler rejects the custom user name, tell me and we'll try the direct connection instead.</p>
 
 <h3>Step 6 (optional). Turn on the AI box, carefully</h3>
-<p>Your budget rule is a one-time $10 of Claude API credit in total, shared with the inquiry assistant and the document reader. The AI box is built to stay far inside that:</p>
+<p>Your Max plan includes <b>$100 of API credit each month</b>. Use that first: claim it in claude.ai under <b>Settings &gt; Billing &gt; API credits</b>, which sets up your API organization. Your rule for paid credit stays the same: at most a one-time $10, shared with the inquiry assistant and the document reader. The AI box is built to stay far inside either amount:</p>
 <ul>
-  <li>Buy <b>$10 of prepaid credit</b> at console.anthropic.com and make sure <b>auto-reload is off</b>. Then the key can't spend more than the credit.</li>
+  <li><b>Don't add a card and don't turn on auto-reload.</b> Then the key can't spend more than the credit you have.</li>
   <li>Make an API key, add <code>ANTHROPIC_API_KEY=...</code> to <code>.env.local</code>, restart <code>npm run dev</code>.</li>
   <li>The app allows <b>20 questions a day</b> (change <code>ASK_DAILY_LIMIT</code> to lower it). Each question uses low effort and a 4,000-token cap.</li>
   <li>The server window prints the tokens and estimated cost of each question. My estimate is about 1 to 2 cents a question on Claude Opus 5.5, but that's an estimate, not a measurement. Check the first few lines it prints.</li>

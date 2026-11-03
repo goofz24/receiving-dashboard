@@ -59,7 +59,7 @@ You need Node.js 20 or newer and a Postgres database. The free Supabase plan wor
    cp .env.example .env.local    # then paste DATABASE_URL into .env.local
    npm run dev                   # open http://localhost:3000
    ```
-4. **Optional, AI box:** add `ANTHROPIC_API_KEY` to `.env.local` and restart. Use prepaid credit with auto-reload off.
+4. **Optional, AI box:** add `ANTHROPIC_API_KEY` to `.env.local` and restart. Use included or prepaid credit, with no card and auto-reload off.
 
 ## Tests
 
