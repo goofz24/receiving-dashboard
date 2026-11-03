@@ -1,0 +1,281 @@
+<!-- Body of the tutorial. build.py wraps it with styles, injects SQL and screenshots, and prints it to PDF. -->
+
+<section class="cover">
+  <p class="kicker">Portfolio project 6 of 7</p>
+  <h1>Receiving Dashboard</h1>
+  <p class="sub">A SQL dashboard on Postgres (Supabase) with a read-only AI question box.<br>Setup guide, line-by-line explanations, interview prep and practice exercises.</p>
+  <p class="meta">For Mel (Melvin Carmona Ortiz) · November 3, 2026 · All data in this project is made up</p>
+  {{IMG:dashboard-light.png:cover-shot}}
+</section>
+
+<h2 id="what">1. What you have</h2>
+
+<p>A small web app that reads stock-receiving data from a Postgres database and shows:</p>
+<ul>
+  <li><b>Four number tiles:</b> deliveries and units received in the last 7 days, count mismatches in the last 30 days, and order lines that are overdue.</li>
+  <li><b>Units received per week</b> for the last 12 weeks.</li>
+  <li><b>Supplier totals:</b> orders, units ordered vs. received, fill rate and dollar value per supplier.</li>
+  <li><b>Count mismatches:</b> order lines that came in short, over, or with damaged units.</li>
+  <li><b>An optional AI question box:</b> type a question in plain English, Claude writes one SQL query, you see the query, and it runs as a user that can only read.</li>
+</ul>
+<p>Under every panel there is a <b>Show the SQL</b> link with the exact query that made it. That's the point of the project: an interviewer can open any number and you can explain where it came from.</p>
+
+<div class="box">
+  <b>Where things stand today (honest status)</b>
+  <ul>
+    <li>Built with Claude Code in a cloud workspace. Not deployed, not on GitHub, nothing public.</li>
+    <li>34 automated tests pass against a real Postgres 16 database (22 unit tests, 12 database tests).</li>
+    <li>The AI box was tested with a <i>fake</i> model only. It has not called the real Claude API yet, so it has cost $0.</li>
+    <li>You have not run it yourself yet. Section 2 walks you through that.</li>
+  </ul>
+</div>
+
+<h3>Why this project helps you get hired</h3>
+<p>SQL showed up in about 13 of the jobs in your tracker (Built and BabyBots-type roles, internal dashboards, AI solutions roles). Right now your cover letters have to say you haven't used SQL in production. After you run this yourself and can explain it, you can honestly say you designed and queried a Postgres database <i>in a personal project</i>. The subject is your real experience: eight years of receiving stock at Novus. You know why a short shipment matters better than most developers do. That makes the interview story believable.</p>
+
+<h2 id="setup">2. Run it yourself (about 45 minutes, $0)</h2>
+
+<p>Everything here uses free tiers. The only thing that can ever cost money is the optional AI box in step 6, and that comes out of your one-time $10 Claude API credit.</p>
+
+<h3>Step 1. Unzip and install</h3>
+<ol>
+  <li>Unzip <code>receiving-dashboard.zip</code> into <code>C:\Users\mco23\OneDrive\Documents\Job search\receiving-dashboard</code>.</li>
+  <li>You need Node.js 20 or newer. In PowerShell, run <code>node -v</code>. If it says v20 or higher, you're set.</li>
+  <li>In PowerShell, go to the folder and install:
+<pre>cd "C:\Users\mco23\OneDrive\Documents\Job search\receiving-dashboard"
+npm install</pre></li>
+</ol>
+
+<h3>Step 2. Create a free Supabase project</h3>
+<ol>
+  <li>Go to <b>supabase.com</b>, sign up (GitHub sign-in is easiest), and click <b>New project</b>.</li>
+  <li>Name it <code>receiving-dashboard</code>. Pick the region closest to you (East US). Save the <b>database password</b> it asks for in a password manager. This is the owner password; the app will <i>not</i> use it.</li>
+  <li>Stay on the <b>Free</b> plan. Don't add a card.</li>
+</ol>
+<p class="note">Supabase pauses free projects after a week with no activity. If that happens, open the project page and click Restore. Your data is kept.</p>
+
+<h3>Step 3. Create the tables, data and read-only user</h3>
+<p>In your Supabase project, open <b>SQL Editor</b> (left menu). For each file below: open it in Notepad or VS Code, copy everything, paste into a new query, click <b>Run</b>.</p>
+<ol>
+  <li><code>sql/01_schema.sql</code> creates the six tables and the view.</li>
+  <li><code>sql/02_seed.sql</code> loads the made-up data (6 suppliers, 36 products, 60 orders, 257 order lines, 53 deliveries).</li>
+  <li><code>sql/03_security.sql</code> creates the read-only user. <b>Before you run it</b>, replace both copies of <code>REPLACE_WITH_A_LONG_RANDOM_PASSWORD</code> with a new long password (letters and numbers only, 24+ characters). Save it in your password manager. The app refuses to start if you leave the placeholder.</li>
+</ol>
+<p>Check it worked: run <code>select status, count(*) from receiving.po_line_status group by 1;</code> You should see five rows: awaiting 36, complete 184, over 3, overdue 10, short 24.</p>
+
+<h3>Step 4. Connect the app as the read-only user</h3>
+<ol>
+  <li>In Supabase, click <b>Connect</b> at the top. Copy the <b>Session pooler</b> connection string. It looks like:<br>
+  <code>postgresql://postgres.abcdefgh:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres</code></li>
+  <li>Change the user name <code>postgres.abcdefgh</code> to <code>dashboard_reader.abcdefgh</code> (keep your own project code after the dot), and put the <b>dashboard_reader</b> password from step 3 where it says [YOUR-PASSWORD].</li>
+  <li>In the project folder, make your settings file: <code>copy .env.example .env.local</code>. Open <code>.env.local</code> and paste the string after <code>DATABASE_URL=</code>.</li>
+</ol>
+<p class="note">Never share or commit <code>.env.local</code>. The <code>.gitignore</code> file already keeps it out of Git.</p>
+
+<h3>Step 5. Start it</h3>
+<pre>npm run dev</pre>
+<p>Open <b>http://localhost:3000</b>. You should see the dashboard. Numbers depend on today's date (the data is stored as "N days ago"), so yours may differ a little from the screenshots.</p>
+<p><b>If it says "Can't reach the database":</b> the message under it tells you why. The usual causes are a typo in the password, using the owner user instead of <code>dashboard_reader.yourcode</code>, or a paused project. If the pooler rejects the custom user name, tell me and we'll try the direct connection instead.</p>
+
+<h3>Step 6 (optional). Turn on the AI box, carefully</h3>
+<p>Your budget rule is a one-time $10 of Claude API credit in total, shared with the inquiry assistant and the document reader. The AI box is built to stay far inside that:</p>
+<ul>
+  <li>Buy <b>$10 of prepaid credit</b> at console.anthropic.com and make sure <b>auto-reload is off</b>. Then the key can't spend more than the credit.</li>
+  <li>Make an API key, add <code>ANTHROPIC_API_KEY=...</code> to <code>.env.local</code>, restart <code>npm run dev</code>.</li>
+  <li>The app allows <b>20 questions a day</b> (change <code>ASK_DAILY_LIMIT</code> to lower it). Each question uses low effort and a 4,000-token cap.</li>
+  <li>The server window prints the tokens and estimated cost of each question. My estimate is about 1 to 2 cents a question on Claude Opus 5.5, but that's an estimate, not a measurement. Check the first few lines it prints.</li>
+  <li>To stretch the credit, set <code>ANTHROPIC_MODEL=claude-haiku-5-5</code>, which is about 40 times cheaper per token.</li>
+</ul>
+<p>Ten questions is plenty to try it and take a screenshot for your portfolio.</p>
+
+<h2 id="tour">3. Tour of the dashboard</h2>
+{{IMG:dashboard-light.png:full}}
+<table class="t">
+  <tr><th>Panel</th><th>What it means for a receiving manager</th></tr>
+  <tr><td>Deliveries / units, last 7 days</td><td>How busy the dock was this week.</td></tr>
+  <tr><td>Count mismatches, last 30 days</td><td>Order lines where the count didn't match the order. Each one is a call to a supplier or a credit to claim.</td></tr>
+  <tr><td>Overdue order lines</td><td>Things that should have arrived already but haven't. Follow up before the shelf runs empty.</td></tr>
+  <tr><td>Units received per week</td><td>Volume over time. The last bar is the current, unfinished week, so it's always lower.</td></tr>
+  <tr><td>Supplier totals</td><td>Which suppliers ship complete orders. Fill rate below about 95% is a supplier worth talking to.</td></tr>
+  <tr><td>Count mismatches table</td><td>The actual lines: which order, which product, how many short or over, and damaged units.</td></tr>
+</table>
+
+<h2 id="tables">4. The database, explained</h2>
+{{DIAGRAM}}
+<p>Six tables live in their own <b>schema</b> called <code>receiving</code> (a schema is a folder for tables). On Supabase, only the <code>public</code> schema is exposed to the internet API by default, so keeping our tables in <code>receiving</code> keeps them off it.</p>
+
+<h3>Why split the data into six tables?</h3>
+<p>Think about the paperwork you already handle at work:</p>
+<ul>
+  <li><b>suppliers</b> and <b>products</b>: the master lists. A supplier's name is stored once. If it changes, you change one row, not hundreds.</li>
+  <li><b>purchase_orders</b> and <b>po_lines</b>: the order header (who, when ordered, when expected) and its lines (which product, how many, at what price). One order has many lines, so they can't be one table without repeating the header on every line.</li>
+  <li><b>receipts</b> and <b>receipt_lines</b>: what actually arrived. A delivery is its own thing because <b>one order can come in two trucks</b> (a split shipment). Each receipt line says how many of one order line were counted on that truck, and how many were damaged.</li>
+</ul>
+<p>This is called <b>normalization</b>: each fact is stored once, in the table where it belongs, and tables point at each other with IDs.</p>
+
+<h3>Words you should know</h3>
+<table class="t">
+  <tr><td><b>Primary key</b></td><td>The unique ID of a row, like <code>po_id</code>. Postgres numbers them automatically (<code>generated always as identity</code>).</td></tr>
+  <tr><td><b>Foreign key</b></td><td>A column that points to another table's primary key, like <code>po_lines.po_id</code> → <code>purchase_orders.po_id</code>. Postgres won't let you add a line to an order that doesn't exist.</td></tr>
+  <tr><td><b>Check constraint</b></td><td>A rule on a column, like <code>qty_ordered &gt; 0</code> or "damaged can't be more than received". Bad data is rejected at the door.</td></tr>
+  <tr><td><b>Index</b></td><td>A lookup shortcut on columns we search or join on often, like <code>receipts.received_on</code>.</td></tr>
+  <tr><td><b>View</b></td><td>A saved query you can select from like a table. <code>po_line_status</code> is one.</td></tr>
+</table>
+
+<h3>One detail interviewers like</h3>
+<p><code>po_lines</code> has its own <code>unit_cost</code>, even though <code>products</code> also has one. Why? Prices change. The order has to remember the price that was agreed <i>on the day you ordered</i>, so the value of a delivery from last month doesn't change when the supplier raises prices today.</p>
+
+<h2 id="query">5. Read one query line by line: supplier totals</h2>
+<p>This is the query behind the Supplier totals panel. It has the two things the research said you must be able to explain: a <b>JOIN</b> and a <b>GROUP BY</b>.</p>
+{{SQL:SUPPLIER_TOTALS}}
+
+<h3>Read it in this order (not top to bottom)</h3>
+<p>SQL is written <code>select … from … where … group by … order by</code>, but the database runs it roughly as <b>from → where → group by → select → order by</b>. Read it that way:</p>
+<ol>
+  <li><b>FROM suppliers s JOIN purchase_orders po ON …</b> — start with suppliers and attach each supplier's orders. <code>s</code> and <code>po</code> are short nicknames (aliases).</li>
+  <li><b>JOIN po_lines pl ON pl.po_id = po.po_id</b> — attach each order's lines. Now there is <b>one row per order line</b>, with the supplier and order info next to it.</li>
+  <li><b>LEFT JOIN ( … ) rcv</b> — the small query inside the brackets adds up everything received per order line (across all trucks). It's a <b>LEFT</b> join so an order line that received nothing still stays in the result, with <code>null</code> for received. A plain JOIN would silently drop it, and the supplier would look better than it is.</li>
+  <li><b>WHERE po.expected_on &lt; current_date</b> — only orders that were already due. Orders still on the truck shouldn't count against a supplier.</li>
+  <li><b>GROUP BY s.supplier_id, s.name</b> — fold all the order-line rows into <b>one row per supplier</b>. Every other column must now be a total (<code>sum</code>, <code>count</code>).</li>
+  <li><b>SELECT</b> the totals:
+    <ul>
+      <li><code>count(distinct po.po_id)</code>: number of orders. <i>Distinct</i> because each order appears once per line; without it, an order with 5 lines would count as 5.</li>
+      <li><code>sum(pl.qty_ordered)</code> and <code>coalesce(sum(rcv.qty_received), 0)</code>: units ordered and received. <code>coalesce</code> turns "nothing" (null) into 0.</li>
+      <li><b>Fill rate</b>: <code>least(received, ordered)</code> per line, added up, divided by units ordered. <code>least</code> stops 3 extra boxes on one line from hiding 3 missing boxes on another. <code>nullif(…, 0)</code> avoids dividing by zero.</li>
+      <li><code>sum(rcv.qty_received * pl.unit_cost)</code>: dollar value received, using the price on the order.</li>
+    </ul>
+  </li>
+  <li><b>ORDER BY value_received DESC</b> — biggest supplier first.</li>
+</ol>
+{{IMG:supplier-totals-with-sql.png:half}}
+
+<h2 id="view">6. The view and its CASE statement</h2>
+<p>The mismatch table and two of the tiles read from the view <code>po_line_status</code>. It does the "ordered vs. received" comparison once, so every other query can just ask for <code>status = 'short'</code>. The heart of it:</p>
+<pre>case
+  when nothing received and expected_on &gt;= today then 'awaiting'
+  when nothing received                         then 'overdue'
+  when received &lt; ordered                       then 'short'
+  when received &gt; ordered                       then 'over'
+  else 'complete'
+end as status</pre>
+<p><code>CASE</code> checks the conditions top to bottom and uses the first one that's true, like an if / else-if chain. The order matters: "nothing received" has to be checked before "received &lt; ordered", or an overdue line would be called short.</p>
+<p>The view is created <code>with (security_invoker = true)</code>. That means it runs with the permissions of whoever is asking, so the row-level security rules in section 7 also apply through the view. Without it, a view runs as its owner and could leak rows.</p>
+
+<h2 id="safety">7. Why the AI box uses a read-only user</h2>
+<p>This is the question the research said you must be able to answer. The short version:</p>
+<div class="box"><b>Treat SQL written by an AI like SQL typed by a stranger.</b> It's usually right, but you can't promise it will never write something harmful, especially if someone types a tricky question on purpose. So the database itself must make harm impossible, not the AI's good behavior.</div>
+<p>The app stacks several layers. Each one alone would stop most problems; together, a mistake in one is caught by the next. This is called <b>defense in depth</b>.</p>
+<table class="t">
+  <tr><th>#</th><th>Layer</th><th>What it stops</th></tr>
+  <tr><td>1</td><td>The app logs in as <code>dashboard_reader</code>, which only has SELECT permission</td><td>Any insert, update, delete, drop. The database refuses, whatever the SQL says.</td></tr>
+  <tr><td>2</td><td>Before running AI SQL, the app checks the connected user can't write</td><td>Someone pasting the owner's connection string by mistake. The AI box refuses to run.</td></tr>
+  <tr><td>3</td><td>A SQL check: one SELECT only, no comments, no data-changing words, no system tables, no risky functions</td><td>Obvious bad queries, rejected early with a clear message.</td></tr>
+  <tr><td>4</td><td>Runs inside a READ ONLY transaction, 3-second timeout, max 200 rows, always rolled back</td><td>Writes that sneak past layer 3, and slow queries that would tie up the database.</td></tr>
+  <tr><td>5</td><td>Row Level Security on every table</td><td>If the schema were ever exposed through Supabase's public API, other roles would see zero rows.</td></tr>
+  <tr><td>6</td><td>The query is shown on screen</td><td>A human can see exactly what ran and judge whether the answer makes sense.</td></tr>
+</table>
+<p>One test deliberately skips layer 3 and sends <code>with gone as (delete from receipts returning *) select * from gone</code> straight to the database. It fails, and the test confirms all 53 receipts are still there.</p>
+
+<h3>How the AI part works</h3>
+<ol>
+  <li>Your question goes to the server (never straight from the browser to Claude, so the API key stays secret on the server).</li>
+  <li>The server sends Claude a short description of the tables and the rules, plus your question.</li>
+  <li>It uses <b>structured output</b>: the API must answer in a fixed JSON shape: <code>{ answerable, sql, explanation }</code>. The app doesn't have to dig SQL out of a paragraph of text.</li>
+  <li>If <code>answerable</code> is false (for example "what's the weather?"), nothing runs.</li>
+  <li>Otherwise the SQL goes through layers 2 to 4, and the page shows the explanation, the SQL and the rows.</li>
+</ol>
+
+<h2 id="tests">8. The tests</h2>
+<p>Run <code>npm test</code> for the 22 unit tests. They don't need a database or an API key. To also run the 12 database tests you need a Postgres you own (for example a local install), and you set <code>TEST_ADMIN_DATABASE_URL</code>. The README has the command.</p>
+<p>What makes the database tests worth talking about: they don't just check that the queries run. They rebuild a fresh database from the three SQL files, then <b>work out every dashboard number a second way in plain JavaScript</b> from the same made-up data, and compare. If the SQL and the JavaScript disagree, one of them is wrong. The other database tests try to break the safety layers (write as the reader, skip the SQL check, run a 100-million-row query, connect as the owner, read as an outsider role) and check each attempt fails.</p>
+
+<h2 id="interview">9. Interview prep</h2>
+<p>Practice these out loud in your own words. Don't memorize my wording; interviewers can tell. The bullet points are what your answer should cover.</p>
+
+<h3>Your 30-second pitch</h3>
+<div class="box">"I've managed stock receiving for eight years, so I built the dashboard I wish I'd had. It's a Postgres database on Supabase with orders, deliveries and counts, and a Next.js page that shows supplier fill rates and every delivery that came in short or over. Every number has its SQL right under it. There's also an optional box where you ask a question in plain English, Claude writes the SQL, and it runs as a read-only database user, so it can't change anything. I built it with Claude Code, and I made sure I can explain every table and query."</div>
+
+<h3>Questions you'll likely get</h3>
+<div class="qa">
+  <p class="q">1. Walk me through your tables. Why are receipts separate from orders?</p>
+  <p>Header vs. lines; one order can arrive in several deliveries (split shipments); each fact stored once; foreign keys keep it consistent.</p>
+
+  <p class="q">2. Explain a query with a JOIN and a GROUP BY.</p>
+  <p>Use supplier totals (section 5). Mention why it's a LEFT JOIN, why <code>count(distinct)</code>, and what GROUP BY does to the rows.</p>
+
+  <p class="q">3. What's the difference between INNER JOIN and LEFT JOIN?</p>
+  <p>Inner keeps only matches; left keeps every row from the left side and fills nulls. Your example: order lines with nothing received.</p>
+
+  <p class="q">4. How do you stop the AI from deleting data?</p>
+  <p>Read-only user first (the database enforces it), then the app's own checks, read-only transaction, timeout and row limit. Say "defense in depth" and "treat AI output as untrusted input".</p>
+
+  <p class="q">5. What if the AI writes a query that runs but gives the wrong answer?</p>
+  <p>That's the real risk, not deletion. The query is shown so a person can check it; the explanation says what it does; for decisions you'd verify with a known report. A next step would be a set of test questions with known answers (an eval).</p>
+
+  <p class="q">6. Why Postgres / Supabase?</p>
+  <p>Real SQL database, free tier, managed hosting, row level security built in, and it's what many startups use.</p>
+
+  <p class="q">7. How do you know your numbers are right?</p>
+  <p>The tests compute each number a second way in JavaScript from the same data and compare. Plus check constraints stop impossible data (negative quantities, more damaged than received).</p>
+
+  <p class="q">8. What did Claude Code do, and what did you do?</p>
+  <p>Be direct: Claude Code wrote the code; the idea and the receiving rules come from your job; you ran it, checked the numbers and can explain it. Only say what you've actually done by then (see section 11). For AI-builder roles this honesty is a plus.</p>
+
+  <p class="q">9. What would you build next?</p>
+  <p>Load receipts from the Receiving Document Reader (the <code>source</code> column is ready); on-time % per supplier; a filter by date range; an eval set for the AI box.</p>
+</div>
+
+<h2 id="exercises">10. Practice exercises (hints only)</h2>
+<p>Try these in the Supabase SQL Editor. Run them as the owner there; that's fine for practice because you're only reading. I've given hints, not answers. When you're stuck, ask me for the next hint first.</p>
+
+<div class="ex">
+  <p class="q">Exercise 1. Top 5 most-damaged products</p>
+  <p>Show product name and total damaged units, highest first, only the top 5.</p>
+  <p class="hint">Hint 1: the view <code>receiving.po_line_status</code> already has <code>product</code> and <code>qty_damaged</code>.<br>Hint 2: you need <code>sum(...)</code>, <code>group by</code>, <code>order by ... desc</code> and <code>limit</code>.<br>Hint 3: add <code>having sum(qty_damaged) &gt; 0</code> to hide products that were never damaged.</p>
+</div>
+<div class="ex">
+  <p class="q">Exercise 2. Late deliveries per supplier</p>
+  <p>For each supplier, count orders whose <i>first</i> delivery arrived after <code>expected_on</code>.</p>
+  <p class="hint">Hint 1: first find each order's first delivery date: <code>min(received_on)</code> from <code>receiving.receipts</code>, grouped by <code>po_id</code>.<br>Hint 2: join that to <code>purchase_orders</code> and then to <code>suppliers</code>.<br>Hint 3: <code>count(*) filter (where first_received &gt; expected_on)</code> counts only late ones.</p>
+</div>
+<div class="ex">
+  <p class="q">Exercise 3. Add an "On-time %" column to the dashboard</p>
+  <p>Take your query from exercise 2 and add it to the Supplier totals panel.</p>
+  <p class="hint">Hint 1: the query lives in <code>src/lib/queries.ts</code>; the table is <code>src/components/SupplierTable.tsx</code>; the conversion from database row to object is in <code>src/lib/data.ts</code>.<br>Hint 2: you can ask Claude Code to make the change, but first write down what you expect each file change to be, then compare.<br>Hint 3: run <code>npm test</code> afterwards. The supplier-totals test may need the new column too.</p>
+</div>
+<div class="ex">
+  <p class="q">Exercise 4. Check the AI (only if you turned it on)</p>
+  <p>Ask: "Which supplier had the most short lines this month?" Read the SQL it shows. Is "this month" the calendar month or the last 30 days? Is it counting lines or units? Write down whether you agree with it.</p>
+  <p class="hint">This is the skill employers actually want: reading AI output critically, not just accepting it.</p>
+</div>
+
+<h2 id="resume">11. Resume and cover-letter lines (when you've earned them)</h2>
+<p>Use these only after you have done the matching steps yourself. Until then, the project isn't on your resume.</p>
+<table class="t">
+  <tr><th>Before you can say…</th><th>You must have…</th></tr>
+  <tr><td>"Built a Postgres database and dashboard"</td><td>Run the SQL files in your own Supabase and the dashboard on your laptop.</td></tr>
+  <tr><td>"SQL" on your skills line</td><td>Done at least exercises 1 and 2 yourself and can explain section 5 without notes.</td></tr>
+  <tr><td>A GitHub link</td><td>Given me the OK to create a public repo (I won't make one without it).</td></tr>
+  <tr><td>"Tested" or "the tests pass"</td><td>Run <code>npm test</code> yourself.</td></tr>
+  <tr><td>"AI question box" with any result</td><td>Turned it on and tried it yourself.</td></tr>
+</table>
+
+<h3>Resume line (projects section)</h3>
+<div class="box"><b>Receiving Dashboard</b> (PostgreSQL, Supabase, Next.js, TypeScript, Claude API) · GitHub<br>
+Built with Claude Code a stock-receiving dashboard based on my eight years managing receiving: a normalized Postgres schema, SQL reports for supplier fill rate and quantity mismatches, and an optional plain-English question box that generates read-only SQL with the Claude API behind a SELECT-only database user. Automated tests check every dashboard number against an independent calculation.</div>
+<p>If you haven't turned on the AI box, drop "Claude API" and the question-box part.</p>
+
+<h3>Cover-letter sentence</h3>
+<div class="box">"I've used SQL in a personal project: a Postgres receiving dashboard on Supabase, where I designed the tables around the receiving process I've run for eight years and wrote reports for supplier fill rates and short shipments."</div>
+<p>Say "in a personal project", never "in production". If a form asks for years of SQL experience, the honest answer is less than one.</p>
+
+<h2 id="files">12. Files in the zip</h2>
+<table class="t">
+  <tr><td><code>README.md</code></td><td>What it is, setup, safety, tests, and a "How I built it" checklist you tick as you go.</td></tr>
+  <tr><td><code>sql/</code></td><td>The three SQL files. <code>02_seed.sql</code> is generated by <code>scripts/generate-seed.mjs</code>.</td></tr>
+  <tr><td><code>src/lib/queries.ts</code></td><td>Every dashboard query, with comments. Start reading here.</td></tr>
+  <tr><td><code>src/lib/sql-guard.ts</code>, <code>run-readonly.ts</code>, <code>ask.ts</code></td><td>The AI box and its safety layers.</td></tr>
+  <tr><td><code>tests/</code></td><td>The 34 tests.</td></tr>
+  <tr><td><code>.env.example</code></td><td>The settings template. Copy to <code>.env.local</code>.</td></tr>
+</table>
+<p>The zip includes a local Git history (one commit) but is not connected to GitHub. Nothing has been pushed, published or deployed.</p>
