@@ -15,8 +15,13 @@ export function createDailyLimiter(limit: number, now: () => Date = () => new Da
       used += 1;
       return true;
     },
+    // how many questions were asked today, for the sidebar
+    usedToday(): number {
+      return now().toISOString().slice(0, 10) === day ? used : 0;
+    },
   };
 }
 
 const configured = Number(process.env.ASK_DAILY_LIMIT ?? 20);
-export const askLimiter = createDailyLimiter(Number.isFinite(configured) && configured >= 0 ? configured : 20);
+export const ASK_LIMIT = Number.isFinite(configured) && configured >= 0 ? configured : 20;
+export const askLimiter = createDailyLimiter(ASK_LIMIT);

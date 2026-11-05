@@ -4,27 +4,28 @@
   <p class="kicker">Portfolio project 6 of 7</p>
   <h1>Receiving Dashboard</h1>
   <p class="sub">A SQL dashboard on Postgres (Supabase) with a read-only AI question box.<br>Setup guide, line-by-line explanations, interview prep and practice exercises.</p>
-  <p class="meta">For Mel (Melvin Carmona Ortiz) · November 3, 2026 · All data in this project is made up</p>
+  <p class="meta">For Mel (Melvin Carmona Ortiz) · November 3, 2026, updated November 5 with the glass redesign · All data in this project is made up</p>
   {{IMG:dashboard-light.png:cover-shot}}
 </section>
 
 <h2 id="what">1. What you have</h2>
 
-<p>A small web app that reads stock-receiving data from a Postgres database and shows:</p>
+<p>A web app that reads stock-receiving data from a Postgres database. It has six pages, in a frosted-glass design with smooth animations:</p>
 <ul>
-  <li><b>Four number tiles:</b> deliveries and units received in the last 7 days, count mismatches in the last 30 days, and order lines that are overdue.</li>
-  <li><b>Units received per week</b> for the last 12 weeks.</li>
-  <li><b>Supplier totals:</b> orders, units ordered vs. received, fill rate and dollar value per supplier.</li>
-  <li><b>Count mismatches:</b> order lines that came in short, over, or with damaged units.</li>
-  <li><b>An optional AI question box:</b> type a question in plain English, Claude writes one SQL query, you see the query, and it runs as a user that can only read.</li>
+  <li><b>Overview:</b> eight number tiles (deliveries, units, mismatches, overdue lines, open orders, fill rate, damaged units, value received, with trend pills), a weekly bar chart you can switch between 4, 8 and 12 weeks, and a donut chart of value by supplier. Click a supplier in the donut and the bar chart filters to it.</li>
+  <li><b>Deliveries:</b> every delivery, newest first. Click one to open what was on the truck. Tabs for the last 7 days and deliveries with problems, a search box, and Copy as CSV.</li>
+  <li><b>Purchase orders:</b> every order line with its status (overdue, awaiting, short, over, complete), how late it is, and a progress bar of received vs. ordered.</li>
+  <li><b>Suppliers:</b> one card per supplier with fill rate, on-time %, value received, a 12-week sparkline and its problem lines.</li>
+  <li><b>Mismatches:</b> a review queue of short, over and damaged lines. Each card has <b>Copy follow-up</b>, which writes the email to the supplier for you (the app never sends anything itself).</li>
+  <li><b>Ask AI (optional):</b> type a question in plain English, Claude writes one SQL query, you see the query, and it runs as a user that can only read.</li>
 </ul>
-<p>Under every panel there is a <b>Show the SQL</b> link with the exact query that made it. That's the point of the project: an interviewer can open any number and you can explain where it came from.</p>
+<p>Every card has a <b>&lt;/&gt;</b> button that shows the exact query behind it, and the button at the top right lists all of them. That's the point of the project: an interviewer can open any number and you can explain where it came from. Press <b>Ctrl K</b> anywhere to search pages, suppliers, orders and products.</p>
 
 <div class="box">
   <b>Where things stand today (honest status)</b>
   <ul>
     <li>Built with Claude Code in a cloud workspace. Not deployed, not on GitHub, nothing public.</li>
-    <li>34 automated tests pass against a real Postgres 16 database (22 unit tests, 12 database tests).</li>
+    <li>45 automated tests pass against a real Postgres 16 database (29 unit tests, 16 database tests).</li>
     <li>The AI box was tested with a <i>fake</i> model only. It has not called the real Claude API yet, so it has cost $0.</li>
     <li>You have not run it yourself yet. Section 2 walks you through that.</li>
   </ul>
@@ -91,14 +92,19 @@ npm install</pre></li>
 <h2 id="tour">3. Tour of the dashboard</h2>
 {{IMG:dashboard-light.png:full}}
 <table class="t">
-  <tr><th>Panel</th><th>What it means for a receiving manager</th></tr>
-  <tr><td>Deliveries / units, last 7 days</td><td>How busy the dock was this week.</td></tr>
+  <tr><th>Page or card</th><th>What it means for a receiving manager</th></tr>
+  <tr><td>Deliveries / units, last 7 days</td><td>How busy the dock was this week. The pill compares with the 7 days before.</td></tr>
   <tr><td>Count mismatches, last 30 days</td><td>Order lines where the count didn't match the order. Each one is a call to a supplier or a credit to claim.</td></tr>
   <tr><td>Overdue order lines</td><td>Things that should have arrived already but haven't. Follow up before the shelf runs empty.</td></tr>
-  <tr><td>Units received per week</td><td>Volume over time. The last bar is the current, unfinished week, so it's always lower.</td></tr>
-  <tr><td>Supplier totals</td><td>Which suppliers ship complete orders. Fill rate below about 95% is a supplier worth talking to.</td></tr>
-  <tr><td>Count mismatches table</td><td>The actual lines: which order, which product, how many short or over, and damaged units.</td></tr>
+  <tr><td>Fill rate</td><td>Of the units we ordered (on orders already due), how many showed up.</td></tr>
+  <tr><td>Units received chart</td><td>Volume over time. The last bar is the current, unfinished week, so it's usually lower.</td></tr>
+  <tr><td>Value by supplier donut</td><td>Who we spend the most with. Click one to see only their deliveries in the chart.</td></tr>
+  <tr><td>Purchase orders page</td><td>Where every line stands. Start your day on the Overdue tab.</td></tr>
+  <tr><td>Suppliers page</td><td>Which suppliers ship complete and on time. Fill rate below about 95% is a supplier worth talking to.</td></tr>
+  <tr><td>Mismatches page</td><td>The lines to chase, with the dollar value at stake and a ready-made email.</td></tr>
 </table>
+<h3>Why the animations are smooth</h3>
+<p>Every animation moves things with <code>transform</code>, <code>opacity</code> or SVG strokes. The browser can run those on the graphics card at the screen's full refresh rate (60, 120 or 144 times a second) without redrawing the page. Numbers count up with <code>requestAnimationFrame</code>, which also runs once per screen refresh. Bars use a CSS animation the first time and a CSS transition when you filter, so they glide to the new height. If a visitor has "reduce motion" turned on in their system settings, the animations switch off.</p>
 
 <h2 id="tables">4. The database, explained</h2>
 {{DIAGRAM}}
@@ -147,6 +153,7 @@ npm install</pre></li>
   </li>
   <li><b>ORDER BY value_received DESC</b> — biggest supplier first.</li>
 </ol>
+<p><b>A detail worth knowing:</b> the query also selects <code>s.city</code> and <code>s.lead_time_days</code> without listing them in GROUP BY. That's allowed because we group by <code>s.supplier_id</code>, the primary key: Postgres knows each supplier has exactly one city, so there's nothing to add up.</p>
 {{IMG:supplier-totals-with-sql.png:half}}
 
 <h2 id="view">6. The view and its CASE statement</h2>
@@ -186,7 +193,7 @@ end as status</pre>
 </ol>
 
 <h2 id="tests">8. The tests</h2>
-<p>Run <code>npm test</code> for the 22 unit tests. They don't need a database or an API key. To also run the 12 database tests you need a Postgres you own (for example a local install), and you set <code>TEST_ADMIN_DATABASE_URL</code>. The README has the command.</p>
+<p>Run <code>npm test</code> for the 29 unit tests. They don't need a database or an API key. To also run the 16 database tests you need a Postgres you own (for example a local install), and you set <code>TEST_ADMIN_DATABASE_URL</code>. The README has the command.</p>
 <p>What makes the database tests worth talking about: they don't just check that the queries run. They rebuild a fresh database from the three SQL files, then <b>work out every dashboard number a second way in plain JavaScript</b> from the same made-up data, and compare. If the SQL and the JavaScript disagree, one of them is wrong. The other database tests try to break the safety layers (write as the reader, skip the SQL check, run a 100-million-row query, connect as the owner, read as an outsider role) and check each attempt fails.</p>
 
 <h2 id="interview">9. Interview prep</h2>
@@ -225,6 +232,11 @@ end as status</pre>
   <p>Load receipts from the Receiving Document Reader (the <code>source</code> column is ready); on-time % per supplier; a filter by date range; an eval set for the AI box.</p>
 </div>
 
+<div class="qa">
+  <p class="q">Extra. The chart filters by supplier instantly. Did you write a new query for each click?</p>
+  <p>No. <code>WEEKLY_UNITS_SQL</code> returns one row per week <i>per supplier</i> (it uses a <code>cross join</code> with <code>suppliers</code> so empty weeks still show). The page adds those rows up in the browser for "all suppliers" or keeps one supplier. That's 72 small rows, so it's cheaper than asking the database again on every click. For millions of rows you'd filter in SQL instead.</p>
+</div>
+
 <h2 id="exercises">10. Practice exercises (hints only)</h2>
 <p>Try these in the Supabase SQL Editor. Run them as the owner there; that's fine for practice because you're only reading. I've given hints, not answers. When you're stuck, ask me for the next hint first.</p>
 
@@ -239,9 +251,9 @@ end as status</pre>
   <p class="hint">Hint 1: first find each order's first delivery date: <code>min(received_on)</code> from <code>receiving.receipts</code>, grouped by <code>po_id</code>.<br>Hint 2: join that to <code>purchase_orders</code> and then to <code>suppliers</code>.<br>Hint 3: <code>count(*) filter (where first_received &gt; expected_on)</code> counts only late ones.</p>
 </div>
 <div class="ex">
-  <p class="q">Exercise 3. Add an "On-time %" column to the dashboard</p>
-  <p>Take your query from exercise 2 and add it to the Supplier totals panel.</p>
-  <p class="hint">Hint 1: the query lives in <code>src/lib/queries.ts</code>; the table is <code>src/components/SupplierTable.tsx</code>; the conversion from database row to object is in <code>src/lib/data.ts</code>.<br>Hint 2: you can ask Claude Code to make the change, but first write down what you expect each file change to be, then compare.<br>Hint 3: run <code>npm test</code> afterwards. The supplier-totals test may need the new column too.</p>
+  <p class="q">Exercise 3. Add a "Damaged %" to each supplier card</p>
+  <p>Show what share of each supplier's received units arrived damaged.</p>
+  <p class="hint">Hint 1: the supplier cards get their problem counts from <code>SUPPLIER_HEALTH_SQL</code> in <code>src/lib/queries.ts</code>. The view has <code>qty_damaged</code> and <code>qty_received</code>.<br>Hint 2: the row-to-object code is in <code>src/lib/data.ts</code> (<code>getSupplierHealth</code>), and the card is in <code>src/components/pages/Suppliers.tsx</code>.<br>Hint 3: you can ask Claude Code to make the change, but first write down what you expect each file change to be, then compare. Run <code>npm test</code> afterwards; the supplier-health test may need the new column too.</p>
 </div>
 <div class="ex">
   <p class="q">Exercise 4. Check the AI (only if you turned it on)</p>
@@ -275,7 +287,9 @@ Built with Claude Code a stock-receiving dashboard based on my eight years manag
   <tr><td><code>sql/</code></td><td>The three SQL files. <code>02_seed.sql</code> is generated by <code>scripts/generate-seed.mjs</code>.</td></tr>
   <tr><td><code>src/lib/queries.ts</code></td><td>Every dashboard query, with comments. Start reading here.</td></tr>
   <tr><td><code>src/lib/sql-guard.ts</code>, <code>run-readonly.ts</code>, <code>ask.ts</code></td><td>The AI box and its safety layers.</td></tr>
-  <tr><td><code>tests/</code></td><td>The 34 tests.</td></tr>
+  <tr><td><code>src/components/</code></td><td>The page: <code>Dashboard.tsx</code> (menu, search, light/dark), <code>pages/</code> (one file per page), <code>charts.tsx</code> (bars, donut, rings, sparklines).</td></tr>
+  <tr><td><code>src/app/globals.css</code></td><td>The glass design and every animation.</td></tr>
+  <tr><td><code>tests/</code></td><td>The 45 tests.</td></tr>
   <tr><td><code>.env.example</code></td><td>The settings template. Copy to <code>.env.local</code>.</td></tr>
 </table>
 <p>The zip includes a local Git history but is not connected to GitHub. Nothing has been pushed, published or deployed.</p>

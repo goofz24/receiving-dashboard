@@ -1,6 +1,6 @@
 # Receiving Dashboard
 
-A stock-receiving dashboard on **Postgres (Supabase)** and **Next.js**. It answers the questions a receiving manager asks every week: what arrived, how each supplier is doing, and which deliveries didn't match the order. Every number on the page comes from a SQL query you can open and read right under it.
+A stock-receiving dashboard on **Postgres (Supabase)** and **Next.js**, in a frosted-glass design with smooth animations. It answers the questions a receiving manager asks every week: what arrived, how each supplier is doing, and which deliveries didn't match the order. Every number on the page comes from a SQL query you can open with the **</>** button on its card.
 
 An optional **AI question box** turns a plain-English question into one read-only SQL query with the Claude API, shows the query, and runs it as a database user that can't change anything.
 
@@ -8,15 +8,22 @@ An optional **AI question box** turns a plain-English question into one read-onl
 
 ![Dashboard](docs/screenshots/dashboard-light.png)
 
+| Suppliers (dark mode) | Mismatches | Phone |
+|---|---|---|
+| ![Suppliers](docs/screenshots/dashboard-dark.png) | ![Mismatches](docs/screenshots/mismatches.png) | ![Phone](docs/screenshots/dashboard-phone.png) |
+
 ## What it shows
 
-| Panel | Question it answers | SQL ideas it uses |
+| Page | What it answers | SQL ideas it uses |
 |---|---|---|
-| Four number tiles | Deliveries and units this week, count mismatches, overdue lines | sub-queries, `count`, `sum`, date math |
-| Units received per week | Is receiving volume steady? | `generate_series` to include empty weeks, `LEFT JOIN`, `GROUP BY` |
-| Supplier totals | Which suppliers ship complete orders? | three `JOIN`s, a `LEFT JOIN` to a sub-query, `GROUP BY`, fill rate with `least()` |
-| Count mismatches | Which order lines came in short, over or damaged? | a **view** (`po_line_status`) with a `CASE` status |
-| Ask a question (optional) | Anything else about the data | Claude API with structured output, read-only SQL |
+| Overview | This week at a glance: 8 number tiles with trends, units per week (4/8/12 weeks), value by supplier. Click a supplier in the donut to filter the chart. | `count ... filter (where ...)`, `generate_series` + `cross join` for empty weeks, `LEFT JOIN`, `GROUP BY` |
+| Deliveries | Every delivery, newest first. Open one to see its lines. Search, tabs, Copy as CSV. | `GROUP BY` on the primary key, joins to the `po_line_status` view |
+| Purchase orders | Where every order line stands and how late it is | the view, `CASE` in `ORDER BY`, date math |
+| Suppliers | Fill rate, on-time %, value and problem lines per supplier, with a 12-week sparkline | three `JOIN`s, a `LEFT JOIN` to a sub-query, fill rate with `least()`, `nullif` |
+| Mismatches | Short, over and damaged lines, with the value at stake and a ready-to-send supplier email | the view with its `CASE` status |
+| Ask AI (optional) | Anything else about the data | Claude API with structured output, read-only SQL |
+
+Also: **Ctrl K** search for pages, suppliers, orders and products; light and dark mode; works on a phone. All animations use `transform`, `opacity` or SVG strokes, so they run at the screen's full refresh rate, and they switch off when the visitor's system asks for reduced motion.
 
 ## The database
 
@@ -70,20 +77,22 @@ TEST_ADMIN_DATABASE_URL=postgresql://postgres:password@localhost:5432/postgres n
 
 The database tests build a fresh database from the three SQL files, then compare every dashboard number with the same numbers worked out separately in JavaScript from the seed data. They also try to write as the read-only user and check that it fails. The AI box tests use a fake model, so they cost nothing.
 
-Current result: **34 tests pass** (22 unit, 12 database), run against Postgres 16.
+Current result: **45 tests pass** (29 unit, 16 database), run against Postgres 16.
 
 ## Project layout
 
 ```
-sql/                 01_schema.sql, 02_seed.sql (generated), 03_security.sql
-scripts/             seed-data.mjs (made-up data), generate-seed.mjs
-src/lib/queries.ts   every dashboard query, with comments
-src/lib/data.ts      runs the queries, turns rows into typed objects
-src/lib/sql-guard.ts checks AI-written SQL
-src/lib/run-readonly.ts  runs AI SQL as read-only with limits
-src/lib/ask.ts       the Claude API call (structured output) and the ask flow
-src/app/             the Next.js page and the /api/ask route
-tests/               unit and database tests
+sql/                      01_schema.sql, 02_seed.sql (generated), 03_security.sql
+scripts/                  seed-data.mjs (made-up data), generate-seed.mjs
+src/lib/queries.ts        every dashboard query, with comments
+src/lib/data.ts           runs the queries, turns rows into typed objects
+src/lib/view-helpers.ts   small helpers: chart scale, trends, follow-up emails, CSV
+src/lib/sql-guard.ts      checks AI-written SQL
+src/lib/run-readonly.ts   runs AI SQL as read-only with limits
+src/lib/ask.ts            the Claude API call (structured output) and the ask flow
+src/app/                  the Next.js page, the /api/ask route, globals.css (design + animations)
+src/components/           Dashboard.tsx (menu, search, light/dark), pages/, charts.tsx, ui.tsx
+tests/                    unit and database tests
 ```
 
 ## How I built it

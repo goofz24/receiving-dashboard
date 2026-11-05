@@ -9,7 +9,10 @@ import { readFileSync } from "node:fs";
 import { Client, Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generateSeed } from "../scripts/seed-data.mjs";
-import { getKpis, getMismatches, getSupplierTotals, getWeeklyUnits } from "@/lib/data";
+import {
+  getDeliveries, getDeliveryLines, getKpis, getMismatches, getOrderLines, getSupplierHealth,
+  getSupplierTotals, getSupplierValue, getWeeklyUnits,
+} from "@/lib/data";
 import { PLACEHOLDER_PASSWORD } from "@/lib/db";
 import { assertReadOnlyUser, ReadOnlyUserError, runReadOnlyQuery } from "@/lib/run-readonly";
 
@@ -85,60 +88,128 @@ describe.skipIf(!ADMIN_URL)("database (needs TEST_ADMIN_DATABASE_URL)", () => {
     for (const f of lineFacts()) expect(sqlStatus.get(f.po_line_id), `line ${f.po_line_id}`).toBe(f.status);
   });
 
+  // helpers over the seed
+  const round1 = (x: number) => Math.round(x * 10) / 10;
+  const costOf = (poLineId: number) => Number(seed.poLines.find((l) => l.po_line_id === poLineId)!.unit_cost);
+  const receiptsIn = (from: number, to: number) => new Set(seed.receipts.filter((r) => r.received_offset >= from && r.received_offset <= to).map((r) => r.receipt_id));
+  const linesOf = (ids: Set<number>) => seed.receiptLines.filter((rl) => ids.has(rl.receipt_id));
+  async function mondayOffset() {
+    const { rows } = await reader.query("select extract(isodow from current_date)::int as dow");
+    return -(rows[0].dow - 1); // this week's Monday, in days from today
+  }
+
   it("KPI tiles match", async () => {
     const facts = lineFacts();
-    const recent = seed.receipts.filter((r) => r.received_offset >= -6);
-    const recentIds = new Set(recent.map((r) => r.receipt_id));
-    expect(await getKpis(reader)).toEqual({
-      deliveries7d: recent.length,
-      units7d: seed.receiptLines.filter((rl) => recentIds.has(rl.receipt_id)).reduce((s, rl) => s + rl.qty_received, 0),
+    const units = (ids: Set<number>) => linesOf(ids).reduce((s, rl) => s + rl.qty_received, 0);
+    const damaged = (ids: Set<number>) => linesOf(ids).reduce((s, rl) => s + rl.qty_damaged, 0);
+    const value = (ids: Set<number>) => linesOf(ids).reduce((s, rl) => s + rl.qty_received * costOf(rl.po_line_id), 0);
+    const r7 = receiptsIn(-6, 0), p7 = receiptsIn(-13, -7), r30 = receiptsIn(-29, 0), p30 = receiptsIn(-59, -30);
+    const due = facts.filter((f) => f.po.expected_offset < 0);
+    const { rows } = await reader.query("select current_date::text as today");
+    const k = await getKpis(reader);
+    expect(k).toMatchObject({
+      today: rows[0].today,
+      deliveries7d: r7.size, deliveriesPrev7d: p7.size,
+      units7d: units(r7), unitsPrev7d: units(p7),
+      damaged30d: damaged(r30), damagedPrev30d: damaged(p30),
       mismatchedLines30d: facts.filter((f) => (f.status === "short" || f.status === "over") && f.last !== null && f.last >= -29).length,
       overdueLines: facts.filter((f) => f.status === "overdue").length,
+      awaitingLines: facts.filter((f) => f.status === "awaiting").length,
+      openOrders: new Set(facts.filter((f) => f.status === "awaiting" || f.status === "overdue").map((f) => f.po_id)).size,
+      fillRatePct: round1((100 * due.reduce((a, f) => a + Math.min(f.received, f.qty_ordered), 0)) / due.reduce((a, f) => a + f.qty_ordered, 0)),
     });
+    expect(k.value30d).toBeCloseTo(value(r30), 2);
+    expect(k.valuePrev30d).toBeCloseTo(value(p30), 2);
   });
 
   it("supplier totals (JOIN + GROUP BY) match", async () => {
     const due = lineFacts().filter((f) => f.po.expected_offset < 0);
-    const expected = seed.suppliers.map((s) => {
+    const actual = await getSupplierTotals(reader);
+    expect(actual).toHaveLength(seed.suppliers.length);
+    for (const s of seed.suppliers) {
       const lines = due.filter((f) => f.po.supplier_id === s.supplier_id);
       const ordered = lines.reduce((a, f) => a + f.qty_ordered, 0);
       const capped = lines.reduce((a, f) => a + Math.min(f.received, f.qty_ordered), 0);
-      return {
-        supplier: s.name,
-        orders: new Set(lines.map((f) => f.po_id)).size,
-        unitsOrdered: ordered,
-        unitsReceived: lines.reduce((a, f) => a + f.received, 0),
-        fillRatePct: Math.round((1000 * capped) / ordered) / 10,
-        valueReceived: Math.round(lines.reduce((a, f) => a + f.received * Number(f.unit_cost), 0) * 100) / 100,
-      };
-    });
-    const actual = await getSupplierTotals(reader);
-    expect(actual).toHaveLength(seed.suppliers.length);
-    for (const e of expected) {
-      const a = actual.find((r) => r.supplier === e.supplier)!;
-      expect(a).toMatchObject({ orders: e.orders, unitsOrdered: e.unitsOrdered, unitsReceived: e.unitsReceived });
-      expect(a.fillRatePct).toBeCloseTo(e.fillRatePct, 1);
-      expect(a.valueReceived).toBeCloseTo(e.valueReceived, 2);
+      const a = actual.find((r) => r.supplierId === s.supplier_id)!;
+      expect(a).toMatchObject({
+        supplier: s.name, city: s.city, leadTimeDays: s.lead_time_days,
+        orders: new Set(lines.map((f) => f.po_id)).size, unitsOrdered: ordered, unitsReceived: lines.reduce((x, f) => x + f.received, 0),
+      });
+      expect(a.fillRatePct).toBeCloseTo(round1((100 * capped) / ordered), 1);
+      expect(a.valueReceived).toBeCloseTo(lines.reduce((x, f) => x + f.received * Number(f.unit_cost), 0), 2);
     }
-    // sorted by value, biggest first
     const values = actual.map((r) => r.valueReceived);
+    expect(values).toEqual([...values].sort((x, y) => y - x)); // biggest first
+  });
+
+  it("supplier health: short, overdue and on-time lines match", async () => {
+    const facts = lineFacts();
+    const health = await getSupplierHealth(reader);
+    for (const s of seed.suppliers) {
+      const mine = facts.filter((f) => f.po.supplier_id === s.supplier_id);
+      const got = mine.filter((f) => f.last !== null);
+      const h = health.find((x) => x.supplierId === s.supplier_id)!;
+      expect(h.shortLines).toBe(mine.filter((f) => f.status === "short").length);
+      expect(h.overdueLines).toBe(mine.filter((f) => f.status === "overdue").length);
+      expect(h.onTimePct).toBeCloseTo(round1((100 * got.filter((f) => f.last! <= f.po.expected_offset).length) / got.length), 1);
+    }
+  });
+
+  it("weekly chart: 12 weeks for every supplier, with the right totals", async () => {
+    const weeks = await getWeeklyUnits(reader);
+    expect(weeks).toHaveLength(12 * seed.suppliers.length);
+    expect(new Set(weeks.map((w) => w.weekStart)).size).toBe(12);
+    const windowStart = (await mondayOffset()) - 77; // Monday 11 weeks before this week's Monday
+    for (const s of seed.suppliers) {
+      const ids = new Set(seed.receipts.filter((r) => r.received_offset >= windowStart && seed.purchaseOrders.find((p) => p.po_id === r.po_id)!.supplier_id === s.supplier_id).map((r) => r.receipt_id));
+      const mine = weeks.filter((w) => w.supplierId === s.supplier_id);
+      expect(mine.reduce((a, w) => a + w.unitsReceived, 0), s.name).toBe(linesOf(ids).reduce((a, rl) => a + rl.qty_received, 0));
+      expect(mine.reduce((a, w) => a + w.deliveries, 0), s.name).toBe(ids.size);
+    }
+  });
+
+  it("value by supplier (donut) covers the same 12 weeks", async () => {
+    const windowStart = (await mondayOffset()) - 77;
+    const rows = await getSupplierValue(reader);
+    for (const r of rows) {
+      const ids = new Set(seed.receipts.filter((x) => x.received_offset >= windowStart && seed.purchaseOrders.find((p) => p.po_id === x.po_id)!.supplier_id === r.supplierId).map((x) => x.receipt_id));
+      expect(r.valueReceived, r.supplier).toBeCloseTo(linesOf(ids).reduce((a, rl) => a + rl.qty_received * costOf(rl.po_line_id), 0), 2);
+    }
+    const values = rows.map((r) => r.valueReceived);
     expect(values).toEqual([...values].sort((x, y) => y - x));
   });
 
-  it("weekly chart has 12 weeks and the right total", async () => {
-    const weeks = await getWeeklyUnits(reader);
-    expect(weeks).toHaveLength(12);
-    const { rows } = await reader.query("select extract(isodow from current_date)::int as dow");
-    const windowStart = -(rows[0].dow - 1) - 77; // Monday 11 weeks before this week's Monday
-    const inWindow = new Set(seed.receipts.filter((r) => r.received_offset >= windowStart).map((r) => r.receipt_id));
-    const expected = seed.receiptLines.filter((rl) => inWindow.has(rl.receipt_id)).reduce((s, rl) => s + rl.qty_received, 0);
-    expect(weeks.reduce((s, w) => s + w.unitsReceived, 0)).toBe(expected);
+  it("deliveries list: one row per delivery with the right totals, newest first", async () => {
+    const rows = await getDeliveries(reader);
+    expect(rows).toHaveLength(seed.receipts.length);
+    for (const r of rows) {
+      const lines = seed.receiptLines.filter((rl) => rl.receipt_id === r.receiptId);
+      expect(r.lines).toBe(lines.length);
+      expect(r.units).toBe(lines.reduce((a, rl) => a + rl.qty_received, 0));
+      expect(r.damaged).toBe(lines.reduce((a, rl) => a + rl.qty_damaged, 0));
+      expect(r.value).toBeCloseTo(lines.reduce((a, rl) => a + rl.qty_received * costOf(rl.po_line_id), 0), 2);
+    }
+    const dates = rows.map((r) => r.receivedOn);
+    expect(dates).toEqual([...dates].sort().reverse());
+    expect(await getDeliveryLines(reader)).toHaveLength(seed.receiptLines.length);
   });
 
-  it("mismatch list shows short, over and damaged lines, newest first, max 20", async () => {
+  it("order lines: every line once, with days past due and the view's status", async () => {
+    const rows = await getOrderLines(reader);
+    expect(rows).toHaveLength(seed.poLines.length);
+    const facts = new Map(lineFacts().map((f) => [f.po_line_id, f]));
+    for (const r of rows) {
+      const f = facts.get(r.poLineId)!;
+      expect(r.status).toBe(f.status);
+      expect(r.daysPastDue).toBe(0 - f.po.expected_offset || 0); // "|| 0" turns -0 into 0
+      expect(r.qtyReceived).toBe(f.received);
+    }
+  });
+
+  it("mismatch list shows every short, over and damaged line, newest first", async () => {
     const rows = await getMismatches(reader);
     const all = lineFacts().filter((f) => f.status === "short" || f.status === "over" || f.damaged > 0);
-    expect(rows).toHaveLength(Math.min(20, all.length));
+    expect(rows).toHaveLength(all.length);
     for (const r of rows) expect(r.status === "short" || r.status === "over" || r.qtyDamaged > 0).toBe(true);
     const dates = rows.map((r) => r.lastReceivedOn!);
     expect(dates).toEqual([...dates].sort().reverse());
