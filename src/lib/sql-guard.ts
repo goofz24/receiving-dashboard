@@ -45,9 +45,9 @@ export function checkGeneratedSql(input: string): GuardResult {
   if (bad) return { ok: false, reason: `The word "${bad.toUpperCase()}" is not allowed in a read-only report.` };
   if (BLOCKED_FUNCTIONS.test(withoutStrings)) return { ok: false, reason: "That query uses a built-in function that is not allowed." };
 
-  // only the receiving tables; no system catalogs or other schemas
+  // only the receiving and itam tables; no system catalogs or other schemas
   if (/\b(pg_catalog|information_schema|auth|storage|extensions|vault)\s*\./i.test(withoutStrings) || /\bpg_[a-z_]+\b/i.test(withoutStrings)) {
-    return { ok: false, reason: "Only the receiving tables can be queried." };
+    return { ok: false, reason: "Only the receiving and IT asset tables can be queried." };
   }
 
   return { ok: true, sql };

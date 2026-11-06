@@ -5,6 +5,12 @@ import type { DashboardData, LineStatus } from "@/lib/data";
 import { SQL_BY_CARD, type SqlKey } from "@/lib/queries";
 import { Icon, type IconName } from "./icons";
 import { Ask } from "./pages/Ask";
+import { Assets } from "./pages/Assets";
+import { Health } from "./pages/Health";
+import { ItOverview, type AssetTab } from "./pages/ItOverview";
+import { Licenses } from "./pages/Licenses";
+import { Lifecycle } from "./pages/Lifecycle";
+import { AssetHistory, NotSetUp } from "./it-ui";
 import { Deliveries } from "./pages/Deliveries";
 import { Mismatches } from "./pages/Mismatches";
 import { Orders } from "./pages/Orders";
@@ -14,11 +20,22 @@ import { highlightSql } from "./SqlCode";
 import { UiContext, type Ui } from "./ui";
 import { MANAGER_NAME } from "@/lib/view-helpers";
 
-const PAGES = ["overview", "ask", "deliveries", "orders", "mismatches", "suppliers"] as const;
+const PAGES = ["overview", "ask", "deliveries", "orders", "mismatches", "suppliers", "it", "assets", "lifecycle", "health", "licenses"] as const;
 type Page = (typeof PAGES)[number];
-const LABEL: Record<Page, string> = { overview: "Overview", ask: "Ask AI", deliveries: "Deliveries", orders: "Purchase orders", mismatches: "Mismatches", suppliers: "Suppliers" };
-const ICON: Record<Page, IconName> = { overview: "home", ask: "sparkles", deliveries: "truck", orders: "clipboard", mismatches: "alert", suppliers: "building" };
-const GROUPS: [string, Page[]][] = [["Dashboard", ["overview", "ask"]], ["Receiving", ["deliveries", "orders", "mismatches"]], ["Partners", ["suppliers"]]];
+const LABEL: Record<Page, string> = {
+  overview: "Overview", ask: "Ask AI", deliveries: "Deliveries", orders: "Purchase orders", mismatches: "Mismatches", suppliers: "Suppliers",
+  it: "IT overview", assets: "Assets", lifecycle: "Warranty & refresh", health: "Device health", licenses: "Licenses",
+};
+const ICON: Record<Page, IconName> = {
+  overview: "home", ask: "sparkles", deliveries: "truck", orders: "clipboard", mismatches: "alert", suppliers: "building",
+  it: "laptop", assets: "box", lifecycle: "refresh", health: "pulse", licenses: "key",
+};
+const GROUPS: [string, Page[]][] = [
+  ["Dashboard", ["overview", "ask"]], ["Receiving", ["deliveries", "orders", "mismatches"]], ["Partners", ["suppliers"]],
+  ["IT assets", ["it", "assets", "lifecycle", "health", "licenses"]],
+];
+
+const IT_PAGES = new Set<Page>(["it", "assets", "lifecycle", "health", "licenses"]);
 
 type Modal = { title: string; sub?: string; body: ReactNode } | null;
 type PalItem = { label: string; kind: string; icon: IconName; go: () => void };
@@ -34,6 +51,8 @@ export function Dashboard({ data, aiEnabled, askLimit, askUsed }: { data: Dashbo
   const [used, setUsed] = useState(askUsed);
   const [orderQuery, setOrderQuery] = useState("");
   const [orderTab, setOrderTab] = useState<LineStatus | "all">("overdue");
+  const [assetQuery, setAssetQuery] = useState("");
+  const [assetTab, setAssetTab] = useState<AssetTab>("all");
   const stage = useRef<HTMLDivElement>(null);
   const nav = useRef<HTMLElement>(null);
   const pill = useRef<HTMLDivElement>(null);
@@ -61,6 +80,7 @@ export function Dashboard({ data, aiEnabled, askLimit, askUsed }: { data: Dashbo
     window.location.hash = p;
   }, []);
   const openOrders = useCallback((q: string) => { setOrderTab("all"); setOrderQuery(q); go("orders"); }, [go]);
+  const openAssets = useCallback((q: string, tab: AssetTab = "all") => { setAssetTab(tab); setAssetQuery(q); go("assets"); }, [go]);
 
   // ---- sliding highlight behind the active menu item ----
   useLayoutEffect(() => {
@@ -110,7 +130,17 @@ export function Dashboard({ data, aiEnabled, askLimit, askUsed }: { data: Dashbo
       </>
     ) });
   }, [openModal, copy]);
-  const ui: Ui = useMemo(() => ({ toast, copy, showSql }), [toast, copy, showSql]);
+  const openAsset = useCallback((assetId: number) => {
+    const a = data.itam?.assets.find((x) => x.assetId === assetId);
+    if (!a || !data.itam) return;
+    openModal({ title: a.assetTag, sub: `${a.manufacturer} ${a.modelName}`, body: (
+      <>
+        <AssetHistory asset={a} events={data.itam.assetEvents.filter((e) => e.assetId === assetId)} />
+        <div className="modal-actions"><button type="button" className="btn sm" onClick={() => showSql("assetEvents")}><Icon name="code" />Show the SQL</button></div>
+      </>
+    ) });
+  }, [data.itam, openModal, showSql]);
+  const ui: Ui = useMemo(() => ({ toast, copy, showSql, openAsset }), [toast, copy, showSql, openAsset]);
   const showAllSql = () => openModal({ title: "Every query on this dashboard", sub: "Click one to read it.", body: (
     <div className="list">
       {(Object.keys(SQL_BY_CARD) as SqlKey[]).map((k) => (
@@ -129,7 +159,9 @@ export function Dashboard({ data, aiEnabled, askLimit, askUsed }: { data: Dashbo
     ...data.suppliers.map((s) => ({ label: s.supplier, kind: "Supplier", icon: "building" as IconName, go: () => openOrders(s.supplier) })),
     ...[...new Set(data.orderLines.map((l) => l.poNumber))].sort().map((po) => ({ label: po, kind: "Order", icon: "clipboard" as IconName, go: () => openOrders(po) })),
     ...[...new Map(data.orderLines.map((l) => [l.sku, l])).values()].map((l) => ({ label: `${l.product} · ${l.sku}`, kind: "Product", icon: "box" as IconName, go: () => openOrders(l.sku) })),
-  ], [data, go, openOrders]);
+    ...(data.itam?.assets ?? []).map((a) => ({ label: `${a.assetTag} · ${a.manufacturer} ${a.modelName}${a.assignedTo ? ` · ${a.assignedTo}` : ""}`, kind: "Asset", icon: "laptop" as IconName, go: () => openAsset(a.assetId) })),
+    ...[...new Set((data.itam?.assets ?? []).map((a) => a.assignedTo).filter((x): x is string => Boolean(x)))].sort().map((name) => ({ label: name, kind: "Person", icon: "userplus" as IconName, go: () => openAssets(name) })),
+  ], [data, go, openOrders, openAssets, openAsset]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); lastFocus.current = document.activeElement as HTMLElement; setPalOpen((o) => !o); }
@@ -142,6 +174,11 @@ export function Dashboard({ data, aiEnabled, askLimit, askUsed }: { data: Dashbo
   const counts: Partial<Record<Page, { n: number; alert?: boolean }>> = {
     deliveries: { n: data.kpis.deliveries7d }, orders: { n: data.kpis.overdueLines, alert: true },
     mismatches: { n: data.mismatches.length, alert: true }, suppliers: { n: data.suppliers.length },
+    ...(data.itam ? {
+      it: { n: data.itam.itKpis.withLeavers + data.itam.itKpis.bitlockerOff, alert: true }, assets: { n: data.itam.itKpis.activeAssets },
+      lifecycle: { n: data.itam.itKpis.warrantyEnding90d }, health: { n: data.itam.deviceHealth.filter((h) => h.flagBitlocker || h.flagLowDisk || h.flagUpdates || h.flagNotChecked).length, alert: true },
+      licenses: { n: data.itam.licenses.filter((l) => l.seatsFree < 0).length, alert: true },
+    } : {}),
   };
 
   return (
@@ -151,7 +188,7 @@ export function Dashboard({ data, aiEnabled, askLimit, askUsed }: { data: Dashbo
         <aside className="side glass" id="side" aria-label="Main menu">
           <div className="brand">
             <div className="brand-mark"><Icon name="package" /></div>
-            <div><b>Receiving</b><small>Dock dashboard</small></div>
+            <div><b>Receiving</b><small>Dock + IT dashboard</small></div>
           </div>
           <nav className="nav" ref={nav}>
             <div className="nav-pill" ref={pill} />
@@ -179,8 +216,8 @@ export function Dashboard({ data, aiEnabled, askLimit, askUsed }: { data: Dashbo
         <div className="col">
           <header className="top">
             <button type="button" className="round menu-btn" aria-label="Open menu" aria-controls="side" aria-expanded={drawer} onClick={() => setDrawer((d) => !d)}><Icon name="menu" /></button>
-            <button type="button" className="search glass" onClick={() => { lastFocus.current = document.activeElement as HTMLElement; setPalOpen(true); }} aria-label="Search orders, suppliers and pages">
-              <Icon name="search" /><span className="stext">Search orders, suppliers, pages…</span><kbd>Ctrl K</kbd>
+            <button type="button" className="search glass" onClick={() => { lastFocus.current = document.activeElement as HTMLElement; setPalOpen(true); }} aria-label="Search orders, suppliers, assets, people and pages">
+              <Icon name="search" /><span className="stext">Search orders, suppliers, assets, people…</span><kbd>Ctrl K</kbd>
             </button>
             <div className="top-right">
               <button type="button" className="round hide-sm" onClick={toggleTheme} aria-label="Switch light or dark">{dark === null ? <Icon name="moon" /> : <Icon name={dark ? "sun" : "moon"} />}</button>
@@ -196,6 +233,12 @@ export function Dashboard({ data, aiEnabled, askLimit, askUsed }: { data: Dashbo
               {page === "suppliers" && <Suppliers data={data} openOrders={openOrders} />}
               {page === "mismatches" && <Mismatches data={data} openOrders={openOrders} />}
               {page === "ask" && <Ask enabled={aiEnabled} limit={askLimit} used={used} onUsed={() => setUsed((u) => u + 1)} />}
+              {IT_PAGES.has(page) && !data.itam && <><div className="head rise"><div><h1>{LABEL[page]}</h1></div></div><NotSetUp /></>}
+              {data.itam && page === "it" && <ItOverview it={data.itam} go={go} openAssets={openAssets} />}
+              {data.itam && page === "assets" && <Assets it={data.itam} query={assetQuery} setQuery={setAssetQuery} tab={assetTab} setTab={setAssetTab} />}
+              {data.itam && page === "lifecycle" && <Lifecycle it={data.itam} />}
+              {data.itam && page === "health" && <Health it={data.itam} />}
+              {data.itam && page === "licenses" && <Licenses it={data.itam} />}
               <footer className="foot rise">All data on this page is made up for a portfolio demo. Built with Claude Code.</footer>
             </main>
           </div>
@@ -230,7 +273,7 @@ function Palette({ items, onClose }: { items: PalItem[]; onClose: () => void }) 
       <div className="sheet">
         <div className="pal-input">
           <Icon name="search" />
-          <input autoFocus value={q} placeholder="Type a page, supplier, PO number or product" aria-controls="pal-list"
+          <input autoFocus value={q} placeholder="Type a page, supplier, PO, product, asset tag or person" aria-controls="pal-list"
             aria-activedescendant={shown.length ? `pal-${Math.min(sel, shown.length - 1)}` : undefined}
             onChange={(e) => { setQ(e.target.value); setSel(0); }}
             onKeyDown={(e) => {

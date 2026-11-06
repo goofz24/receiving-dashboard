@@ -3,6 +3,7 @@ import {
   DELIVERIES_SQL, DELIVERY_LINES_SQL, KPI_SQL, MISMATCHES_SQL, ORDER_LINES_SQL,
   SUPPLIER_HEALTH_SQL, SUPPLIER_TOTALS_SQL, SUPPLIER_VALUE_SQL, WEEKLY_UNITS_SQL,
 } from "./queries";
+import { getItamData, type ItamData } from "./itam-data";
 
 // Postgres sends big numbers (count, sum, numeric) as strings so nothing
 // is lost. We turn them into JavaScript numbers here; these values are
@@ -116,13 +117,30 @@ export async function getMismatches(pool: Pool): Promise<MismatchRow[]> {
 export type DashboardData = {
   kpis: Kpis; weeks: WeekRow[]; supplierValue: SupplierValueRow[]; deliveries: DeliveryRow[]; deliveryLines: DeliveryLineRow[];
   orderLines: OrderLineRow[]; suppliers: SupplierRow[]; supplierHealth: SupplierHealthRow[]; mismatches: MismatchRow[];
+  // null when the IT asset tables (sql/04 to 06) haven't been created yet
+  itam: ItamData | null;
 };
+
+// Postgres error codes for "no such table", "no such schema" and
+// "permission denied" (the tables exist but 06_itam_security.sql wasn't run).
+const MISSING = new Set(["42P01", "3F000", "42501"]);
+
+// The IT pages are optional: if their tables don't exist yet, the receiving
+// pages still work and the IT pages say how to set them up.
+async function getItamIfReady(pool: Pool): Promise<ItamData | null> {
+  try {
+    return await getItamData(pool);
+  } catch (err) {
+    if (MISSING.has((err as { code?: string }).code ?? "")) return null;
+    throw err;
+  }
+}
 
 // Runs every query at once. The pool has at most 5 connections, so they queue nicely.
 export async function getDashboardData(pool: Pool): Promise<DashboardData> {
-  const [kpis, weeks, supplierValue, deliveries, deliveryLines, orderLines, suppliers, supplierHealth, mismatches] = await Promise.all([
+  const [kpis, weeks, supplierValue, deliveries, deliveryLines, orderLines, suppliers, supplierHealth, mismatches, itam] = await Promise.all([
     getKpis(pool), getWeeklyUnits(pool), getSupplierValue(pool), getDeliveries(pool), getDeliveryLines(pool),
-    getOrderLines(pool), getSupplierTotals(pool), getSupplierHealth(pool), getMismatches(pool),
+    getOrderLines(pool), getSupplierTotals(pool), getSupplierHealth(pool), getMismatches(pool), getItamIfReady(pool),
   ]);
-  return { kpis, weeks, supplierValue, deliveries, deliveryLines, orderLines, suppliers, supplierHealth, mismatches };
+  return { kpis, weeks, supplierValue, deliveries, deliveryLines, orderLines, suppliers, supplierHealth, mismatches, itam };
 }

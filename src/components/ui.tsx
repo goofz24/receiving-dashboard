@@ -8,8 +8,11 @@ import { SQL_BY_CARD, type SqlKey } from "@/lib/queries";
 import { Icon, type IconName } from "./icons";
 
 // ---- shared actions (toast, copy, SQL viewer), provided by Dashboard ----
-export type Ui = { toast: (msg: string) => void; copy: (text: string, done: string) => void; showSql: (key: SqlKey) => void };
-export const UiContext = createContext<Ui>({ toast: () => {}, copy: () => {}, showSql: () => {} });
+export type Ui = {
+  toast: (msg: string) => void; copy: (text: string, done: string) => void; showSql: (key: SqlKey) => void;
+  openAsset: (assetId: number) => void;  // opens one IT asset's history
+};
+export const UiContext = createContext<Ui>({ toast: () => {}, copy: () => {}, showSql: () => {}, openAsset: () => {} });
 export const useUi = () => useContext(UiContext);
 
 // Counts up to `value` with requestAnimationFrame, which runs at the screen's refresh rate.

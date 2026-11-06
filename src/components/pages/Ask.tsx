@@ -11,6 +11,7 @@ const EXAMPLES = [
   "Which supplier had the most short lines this month?",
   "Total value received by category in the last 4 weeks",
   "Which products were damaged most often?",
+  "Which laptops have a warranty ending in the next 90 days?",
 ];
 
 type Turn = { id: number; question: string; result: AskResult | null };

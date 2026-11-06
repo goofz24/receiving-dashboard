@@ -4,6 +4,8 @@
 // The app logs in as dashboard_reader, whose search_path is "receiving",
 // so we can write  suppliers  instead of  receiving.suppliers.
 
+import { ITAM_SQL_BY_CARD } from "./itam-queries";
+
 // ---------------------------------------------------------------- Overview
 
 export const KPI_SQL = `
@@ -200,6 +202,7 @@ order by last_received_on desc, abs(qty_difference) desc
 `.trim();
 
 // Shown by the </> buttons. Keys match the cards.
+// The IT asset queries live in itam-queries.ts and are added at the end.
 export const SQL_BY_CARD = {
   kpis: { title: "Number tiles", sql: KPI_SQL },
   weekly: { title: "Units received per week", sql: WEEKLY_UNITS_SQL },
@@ -210,5 +213,6 @@ export const SQL_BY_CARD = {
   suppliers: { title: "Supplier totals", sql: SUPPLIER_TOTALS_SQL },
   supplierHealth: { title: "Supplier on-time and problem lines", sql: SUPPLIER_HEALTH_SQL },
   mismatches: { title: "Count mismatches", sql: MISMATCHES_SQL },
+  ...ITAM_SQL_BY_CARD,
 } as const;
 export type SqlKey = keyof typeof SQL_BY_CARD;

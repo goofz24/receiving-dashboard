@@ -14,7 +14,7 @@ export async function assertReadOnlyUser(client: PoolClient): Promise<void> {
            exists (
              select 1
              from pg_tables t
-             where t.schemaname = 'receiving'
+             where t.schemaname in ('receiving', 'itam')
                and (has_table_privilege(current_user, format('%I.%I', t.schemaname, t.tablename), 'INSERT')
                  or has_table_privilege(current_user, format('%I.%I', t.schemaname, t.tablename), 'UPDATE')
                  or has_table_privilege(current_user, format('%I.%I', t.schemaname, t.tablename), 'DELETE')
@@ -40,7 +40,7 @@ export async function runReadOnlyQuery(pool: Pool, sql: string) {
   try {
     await client.query("begin transaction read only");
     await client.query(`set local statement_timeout = ${AI_QUERY_TIMEOUT_MS}`);
-    await client.query("set local search_path = receiving");
+    await client.query("set local search_path = receiving, itam");
     await assertReadOnlyUser(client);
     // Wrapping the query as a sub-select means it must be ONE select,
     // and lets us add our own LIMIT on top of whatever it says.
