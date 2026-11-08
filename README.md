@@ -1,5 +1,7 @@
 # Receiving Dashboard
 
+[![CI](https://github.com/goofz24/receiving-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/goofz24/receiving-dashboard/actions/workflows/ci.yml)
+
 A stock-receiving dashboard on **Postgres (Supabase)** and **Next.js**, in a frosted-glass design with smooth animations. It answers the questions a receiving manager asks every week: what arrived, how each supplier is doing, and which deliveries didn't match the order. Every number on the page comes from a SQL query you can open with the **</>** button on its card.
 
 It also has an **IT asset tracker** (ITAM): every laptop, phone, screen and software seat from purchase to disposal, with the problems an IT team has to chase: devices still with people who left, laptops with BitLocker off, warranties about to end, and software seats nobody uses. See [IT asset tracker](#it-asset-tracker) below.
@@ -114,6 +116,8 @@ TEST_ADMIN_DATABASE_URL=postgresql://postgres:password@localhost:5432/postgres n
 The database tests build a fresh database from the SQL files, then compare every dashboard number with the same numbers worked out separately in JavaScript from the seed data. For the IT pages that includes working out every asset's status and owner again from its events. They also try to write as the read-only user and check that it fails, and check that the receiving pages still load in a database without the IT tables. The AI box tests use a fake model, so they cost nothing.
 
 Current result: **67 tests pass** (34 unit, 33 database), run against Postgres 16.
+
+GitHub Actions runs the type check, all 67 tests (with a throwaway Postgres 16 database) and a production build on every push and pull request. See [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 ## Project layout
 
